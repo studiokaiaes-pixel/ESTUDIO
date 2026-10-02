@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Course, Topic, ContentBlock } from '@/lib/coursesStore';
-import { CourseTopicPreview } from './CourseTopicPreview';
 import {
   ArrowLeft,
   Plus,
@@ -24,10 +23,11 @@ import {
   ListOrdered,
   Link as LinkIcon,
   Eye,
-  Columns,
-  Edit3,
   Save,
+  Type,
+  Maximize2,
 } from 'lucide-react';
+import { ProgressiveBlur } from '@/components/ui/progressive-blur';
 
 export function TopicEditor({
   course,
@@ -41,7 +41,11 @@ export function TopicEditor({
   onBack: () => void;
 }) {
   const [currentTopic, setCurrentTopic] = useState<Topic>(JSON.parse(JSON.stringify(topic)));
-  const [activeTab, setActiveTab] = useState<'editor' | 'split' | 'preview'>('split');
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(
+    currentTopic.blocks[0]?.id || null
+  );
+
+  const activeBlock = currentTopic.blocks.find((b) => b.id === selectedBlockId);
 
   const handleTitleChange = (val: string) => {
     setCurrentTopic((prev) => ({ ...prev, title: val }));
@@ -55,7 +59,12 @@ export function TopicEditor({
     const newBlock: ContentBlock = {
       id: 'block-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       type,
-      text: type === 'heading' ? 'Nuevo Título de Sección' : type === 'paragraph' ? 'Escribe aquí tu texto...' : '',
+      text:
+        type === 'heading'
+          ? 'NUEVO TÍTULO DE SECCIÓN'
+          : type === 'paragraph'
+          ? 'Escribe tu párrafo aquí directamente en el documento...'
+          : '',
       quoteText: type === 'quote' ? '“Escribe el versículo o cita bíblica aquí”' : undefined,
       quoteReference: type === 'quote' ? 'Libro 1:1 (Reina-Valera 1960)' : undefined,
       quoteUrl: type === 'quote' ? 'https://www.biblegateway.com/' : undefined,
@@ -70,24 +79,20 @@ export function TopicEditor({
         underline: false,
       },
     };
+
     setCurrentTopic((prev) => ({
       ...prev,
       blocks: [...prev.blocks, newBlock],
     }));
+    setSelectedBlockId(newBlock.id);
   };
 
-  const updateBlock = (blockId: string, updates: Partial<ContentBlock>) => {
-    setCurrentTopic((prev) => ({
-      ...prev,
-      blocks: prev.blocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
-    }));
-  };
-
-  const updateBlockStyle = (blockId: string, styleUpdates: Partial<NonNullable<ContentBlock['style']>>) => {
+  const updateActiveStyle = (styleUpdates: Partial<NonNullable<ContentBlock['style']>>) => {
+    if (!selectedBlockId) return;
     setCurrentTopic((prev) => ({
       ...prev,
       blocks: prev.blocks.map((b) => {
-        if (b.id !== blockId) return b;
+        if (b.id !== selectedBlockId) return b;
         return {
           ...b,
           style: {
@@ -99,11 +104,21 @@ export function TopicEditor({
     }));
   };
 
+  const updateBlock = (blockId: string, updates: Partial<ContentBlock>) => {
+    setCurrentTopic((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
+    }));
+  };
+
   const removeBlock = (blockId: string) => {
     setCurrentTopic((prev) => ({
       ...prev,
       blocks: prev.blocks.filter((b) => b.id !== blockId),
     }));
+    if (selectedBlockId === blockId) {
+      setSelectedBlockId(null);
+    }
   };
 
   const moveBlock = (index: number, direction: 'up' | 'down') => {
@@ -116,14 +131,10 @@ export function TopicEditor({
     setCurrentTopic((prev) => ({ ...prev, blocks: newBlocks }));
   };
 
-  const handleSave = () => {
-    onSaveTopic(currentTopic);
-  };
-
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a] text-white">
-      {/* Header Controls */}
-      <div className="flex items-center justify-between p-4 bg-[#141414] border-b border-white/10 shrink-0 flex-wrap gap-3">
+    <div className="flex flex-col h-screen bg-[#111111] text-white font-sans overflow-hidden">
+      {/* Word-like Top Navigation Header */}
+      <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -132,518 +143,409 @@ export function TopicEditor({
             <ArrowLeft size={18} />
           </button>
           <div>
-            <span className="text-[10px] text-[#22c55e] font-mono uppercase tracking-widest block">
-              Editando Curso: {course.title}
-            </span>
-            <h2 className="text-lg font-bold text-white uppercase">{currentTopic.title || 'Sin Título'}</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-[#22c55e]/20 text-[#22c55e] font-mono px-2 py-0.5 rounded font-bold uppercase">
+                Documento Word Editor
+              </span>
+              <span className="text-xs text-gray-400">Curso: {course.title}</span>
+            </div>
+            <h2 className="text-base font-bold text-white uppercase">{currentTopic.title || 'Documento sin título'}</h2>
           </div>
-        </div>
-
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 bg-black/50 p-1 rounded-xl border border-white/10">
-          <button
-            onClick={() => setActiveTab('editor')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === 'editor' ? 'bg-[#22c55e] text-black shadow-md' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Edit3 size={14} />
-            <span>Editor</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('split')}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === 'split' ? 'bg-[#22c55e] text-black shadow-md' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Columns size={14} />
-            <span>Vista Dividida</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === 'preview' ? 'bg-[#22c55e] text-black shadow-md' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Eye size={14} />
-            <span>Previsualización</span>
-          </button>
         </div>
 
         <button
-          onClick={handleSave}
-          className="flex items-center gap-2 px-5 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-[#22c55e]/20"
+          onClick={() => onSaveTopic(currentTopic)}
+          className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-[#22c55e]/20"
         >
           <Save size={16} />
-          <span>Guardar Cambios</span>
+          <span>Guardar Documento</span>
         </button>
       </div>
 
-      {/* Editor & Preview Split Workspace */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-        {/* Left Column: Rich Editor Workspace */}
-        {(activeTab === 'editor' || activeTab === 'split') && (
-          <div
-            className={`${
-              activeTab === 'split' ? 'md:col-span-6 border-r border-white/10' : 'md:col-span-12'
-            } p-4 md:p-6 overflow-y-auto space-y-6 bg-[#0a0a0a]`}
+      {/* Word Toolbar Ribbon */}
+      <div className="bg-[#222222] border-b border-white/10 p-2.5 flex items-center justify-center flex-wrap gap-2 text-xs select-none shrink-0 shadow-inner">
+        {/* Font Size & Type Selector */}
+        <div className="flex items-center gap-1 bg-black/40 p-1.5 rounded-xl border border-white/10">
+          <Type size={14} className="text-[#22c55e] ml-1" />
+          <select
+            value={activeBlock?.style?.fontSize || 'base'}
+            onChange={(e) => updateActiveStyle({ fontSize: e.target.value as any })}
+            className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer pr-1"
           >
-            {/* Metadata Section */}
-            <div className="p-4 bg-[#141414] border border-white/10 rounded-2xl space-y-4">
-              <h3 className="text-xs uppercase font-mono tracking-widest text-gray-400 font-bold">
-                Datos del Tema / Subpágina
-              </h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Título del Tema</label>
-                  <input
-                    type="text"
-                    value={currentTopic.title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#22c55e]"
-                    placeholder="Ej: I. La Deidad de Cristo"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Subtítulo / Encabezado Corto</label>
-                  <input
-                    type="text"
-                    value={currentTopic.subtitle || ''}
-                    onChange={(e) => handleSubtitleChange(e.target.value)}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#22c55e]"
-                    placeholder="Ej: I. LA DEIDAD DE CRISTO - CRISTOLOGÍA"
-                  />
-                </div>
-              </div>
-            </div>
+            <option value="xs" className="bg-[#222]">Texto Muy Pequeño</option>
+            <option value="sm" className="bg-[#222]">Texto Pequeño</option>
+            <option value="base" className="bg-[#222]">Texto Normal (base)</option>
+            <option value="lg" className="bg-[#222]">Subtítulo Mediano (lg)</option>
+            <option value="xl" className="bg-[#222]">Encabezado Grande (xl)</option>
+            <option value="2xl" className="bg-[#222]">Título 2xl</option>
+            <option value="3xl" className="bg-[#222]">Título 3xl</option>
+            <option value="4xl" className="bg-[#222]">Título Principal 4xl</option>
+          </select>
+        </div>
 
-            {/* Add Content Block Action Bar */}
-            <div className="p-4 bg-[#141414] border border-white/10 rounded-2xl">
-              <h3 className="text-xs uppercase font-mono tracking-widest text-gray-400 font-bold mb-3">
-                Insertar Contenido
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => addBlock('heading')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
+        {/* Text Styling Group */}
+        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+          <button
+            onClick={() => updateActiveStyle({ bold: !activeBlock?.style?.bold })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.bold ? 'bg-[#22c55e] text-black font-bold' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Negrita"
+          >
+            <Bold size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ italic: !activeBlock?.style?.italic })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.italic ? 'bg-[#22c55e] text-black font-bold' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Cursiva"
+          >
+            <Italic size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ underline: !activeBlock?.style?.underline })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.underline ? 'bg-[#22c55e] text-black font-bold' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Subrayado"
+          >
+            <Underline size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ highlight: !activeBlock?.style?.highlight })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.highlight ? 'bg-yellow-400 text-black font-bold' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Resaltador Amarillo"
+          >
+            <Highlighter size={15} />
+          </button>
+        </div>
+
+        {/* Alignment Group */}
+        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+          <button
+            onClick={() => updateActiveStyle({ textAlign: 'left' })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.textAlign === 'left' ? 'bg-[#22c55e] text-black' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Alinear Izquierda"
+          >
+            <AlignLeft size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ textAlign: 'center' })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.textAlign === 'center' ? 'bg-[#22c55e] text-black' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Centrar"
+          >
+            <AlignCenter size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ textAlign: 'right' })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.textAlign === 'right' ? 'bg-[#22c55e] text-black' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Alinear Derecha"
+          >
+            <AlignRight size={15} />
+          </button>
+          <button
+            onClick={() => updateActiveStyle({ textAlign: 'justify' })}
+            className={`p-1.5 rounded-lg transition-colors ${
+              activeBlock?.style?.textAlign === 'justify' ? 'bg-[#22c55e] text-black' : 'text-gray-300 hover:bg-white/10'
+            }`}
+            title="Justificar"
+          >
+            <AlignJustify size={15} />
+          </button>
+        </div>
+
+        {/* Insert Elements Ribbon */}
+        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+          <button
+            onClick={() => addBlock('heading')}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-200 transition-colors"
+          >
+            <Heading size={14} className="text-[#22c55e]" />
+            <span>Encabezado</span>
+          </button>
+          <button
+            onClick={() => addBlock('paragraph')}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-200 transition-colors"
+          >
+            <AlignLeft size={14} className="text-[#22c55e]" />
+            <span>Párrafo</span>
+          </button>
+          <button
+            onClick={() => addBlock('quote')}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-200 transition-colors"
+          >
+            <Quote size={14} className="text-[#22c55e]" />
+            <span>Cita Bíblica</span>
+          </button>
+          <button
+            onClick={() => addBlock('image')}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-200 transition-colors"
+          >
+            <ImageIcon size={14} className="text-[#22c55e]" />
+            <span>Imagen</span>
+          </button>
+          <button
+            onClick={() => addBlock('list')}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-200 transition-colors"
+          >
+            <List size={14} className="text-[#22c55e]" />
+            <span>Lista</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Workspace - Word Page Sheet View */}
+      <div className="flex-1 bg-[#181818] overflow-y-auto p-4 md:p-10 flex justify-center scroll-smooth">
+        <div className="w-full max-w-4xl bg-[#f5f4f3] text-black shadow-2xl rounded-2xl min-h-[900px] p-6 md:p-16 border border-black/10 relative transition-all">
+
+          <ProgressiveBlur position="top" backgroundColor="#f5f4f3" height="60px" />
+
+          {/* Subtitle Header Input */}
+          <div className="text-center mb-6">
+            <input
+              type="text"
+              value={currentTopic.subtitle || ''}
+              onChange={(e) => handleSubtitleChange(e.target.value)}
+              className="w-full text-center bg-transparent text-[11px] md:text-xs uppercase tracking-widest text-black/50 font-bold focus:outline-none focus:bg-black/5 rounded py-1"
+              placeholder="ENCABEZADO / SUBTÍTULO DEL DOCUMENTO..."
+            />
+          </div>
+
+          {/* Inline Document Canvas Blocks */}
+          <div className="space-y-4">
+            {currentTopic.blocks.map((block, index) => {
+              const isSelected = selectedBlockId === block.id;
+
+              const fontClasses = {
+                xs: 'text-xs',
+                sm: 'text-sm',
+                base: 'text-base',
+                lg: 'text-lg',
+                xl: 'text-xl',
+                '2xl': 'text-2xl',
+                '3xl': 'text-3xl',
+                '4xl': 'text-4xl',
+                '5xl': 'text-5xl',
+                '6xl': 'text-6xl',
+              }[block.style?.fontSize || 'base'];
+
+              const alignClasses = {
+                left: 'text-left',
+                center: 'text-center',
+                right: 'text-right',
+                justify: 'text-justify',
+              }[block.style?.textAlign || 'left'];
+
+              const weightClass = block.style?.bold ? 'font-bold' : 'font-normal';
+              const italicClass = block.style?.italic ? 'italic' : '';
+              const underlineClass = block.style?.underline ? 'underline underline-offset-4' : '';
+              const highlightClass = block.style?.highlight ? 'bg-yellow-200/80 px-1 rounded-sm' : '';
+
+              return (
+                <div
+                  key={block.id}
+                  onClick={() => setSelectedBlockId(block.id)}
+                  className={`relative group rounded-xl p-3 transition-all ${
+                    isSelected
+                      ? 'ring-2 ring-[#22c55e] bg-white shadow-md'
+                      : 'hover:bg-black/[0.02]'
+                  }`}
                 >
-                  <Heading size={14} className="text-[#22c55e]" />
-                  <span>Encabezado</span>
-                </button>
-                <button
-                  onClick={() => addBlock('paragraph')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
-                >
-                  <AlignLeft size={14} className="text-[#22c55e]" />
-                  <span>Párrafo</span>
-                </button>
-                <button
-                  onClick={() => addBlock('quote')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
-                >
-                  <Quote size={14} className="text-[#22c55e]" />
-                  <span>Cita Bíblica</span>
-                </button>
-                <button
-                  onClick={() => addBlock('image')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
-                >
-                  <ImageIcon size={14} className="text-[#22c55e]" />
-                  <span>Imagen</span>
-                </button>
-                <button
-                  onClick={() => addBlock('list')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
-                >
-                  <List size={14} className="text-[#22c55e]" />
-                  <span>Lista</span>
-                </button>
-                <button
-                  onClick={() => addBlock('link')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-200 transition-colors"
-                >
-                  <LinkIcon size={14} className="text-[#22c55e]" />
-                  <span>Enlace</span>
-                </button>
-              </div>
-            </div>
+                  {/* Floating Action Bar on Select */}
+                  {isSelected && (
+                    <div className="absolute -top-3 right-3 bg-black text-white px-2 py-1 rounded-lg text-[10px] font-mono flex items-center gap-2 shadow-lg z-20">
+                      <span>Bloque {index + 1} ({block.type})</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveBlock(index, 'up');
+                        }}
+                        disabled={index === 0}
+                        className="hover:text-[#22c55e] disabled:opacity-30"
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveBlock(index, 'down');
+                        }}
+                        disabled={index === currentTopic.blocks.length - 1}
+                        className="hover:text-[#22c55e] disabled:opacity-30"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeBlock(block.id);
+                        }}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
 
-            {/* List of Editable Content Blocks */}
-            <div className="space-y-4">
-              {currentTopic.blocks.length === 0 ? (
-                <div className="p-8 text-center bg-[#141414] border border-dashed border-white/10 rounded-2xl text-gray-500 text-xs">
-                  Aún no hay bloques de contenido. Usa la barra superior para agregar títulos, párrafos o citas.
-                </div>
-              ) : (
-                currentTopic.blocks.map((block, index) => (
-                  <div
-                    key={block.id}
-                    className="p-4 bg-[#141414] border border-white/10 rounded-2xl space-y-3 relative group"
-                  >
-                    {/* Block Toolbar */}
-                    <div className="flex items-center justify-between pb-2 border-b border-white/5 flex-wrap gap-2">
-                      <span className="text-[10px] font-mono text-[#22c55e] uppercase tracking-wider font-bold">
-                        Bloque {index + 1}: {block.type}
-                      </span>
+                  {/* Heading Block */}
+                  {block.type === 'heading' && (
+                    <textarea
+                      rows={1}
+                      value={block.text || ''}
+                      onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                      className={`w-full bg-transparent resize-none focus:outline-none uppercase tracking-tight ${fontClasses} ${alignClasses} ${weightClass} ${italicClass} ${underlineClass} ${highlightClass}`}
+                      placeholder="Escribe el título aquí..."
+                    />
+                  )}
 
-                      <div className="flex items-center gap-1">
-                        {/* Style Formatting Options for Text Blocks */}
-                        {(block.type === 'heading' || block.type === 'paragraph') && (
-                          <div className="flex items-center gap-1 mr-2 bg-black/40 p-1 rounded-lg border border-white/5">
-                            {/* Font Size Select */}
-                            <select
-                              value={block.style?.fontSize || 'base'}
-                              onChange={(e) =>
-                                updateBlockStyle(block.id, {
-                                  fontSize: e.target.value as any,
-                                })
-                              }
-                              className="bg-transparent text-gray-300 text-xs focus:outline-none cursor-pointer pr-1"
-                            >
-                              <option value="xs" className="bg-[#141414]">Muy Pequeño (xs)</option>
-                              <option value="sm" className="bg-[#141414]">Pequeño (sm)</option>
-                              <option value="base" className="bg-[#141414]">Normal (base)</option>
-                              <option value="lg" className="bg-[#141414]">Mediano (lg)</option>
-                              <option value="xl" className="bg-[#141414]">Grande (xl)</option>
-                              <option value="2xl" className="bg-[#141414]">Muy Grande (2xl)</option>
-                              <option value="3xl" className="bg-[#141414]">Título 3xl</option>
-                              <option value="4xl" className="bg-[#141414]">Título 4xl</option>
-                            </select>
+                  {/* Paragraph Block */}
+                  {block.type === 'paragraph' && (
+                    <textarea
+                      rows={3}
+                      value={block.text || ''}
+                      onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                      className={`w-full bg-transparent resize-none focus:outline-none leading-relaxed text-black/80 ${fontClasses} ${alignClasses} ${weightClass} ${italicClass} ${underlineClass} ${highlightClass}`}
+                      placeholder="Escribe el párrafo aquí..."
+                    />
+                  )}
 
-                            <button
-                              onClick={() =>
-                                updateBlockStyle(block.id, { bold: !block.style?.bold })
-                              }
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.bold ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                              title="Negrita"
-                            >
-                              <Bold size={13} />
-                            </button>
+                  {/* Biblical Quote Block */}
+                  {block.type === 'quote' && (
+                    <div className="pl-4 border-l-2 border-black/20 space-y-2 py-1">
+                      <textarea
+                        rows={2}
+                        value={block.quoteText || ''}
+                        onChange={(e) => updateBlock(block.id, { quoteText: e.target.value })}
+                        className="w-full bg-transparent resize-none focus:outline-none font-bold text-base md:text-lg text-black"
+                        placeholder="“Escribe la cita o versículo bíblico...”"
+                      />
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={block.quoteReference || ''}
+                          onChange={(e) => updateBlock(block.id, { quoteReference: e.target.value })}
+                          className="bg-transparent text-xs opacity-70 border-b border-black/10 focus:outline-none focus:border-black font-semibold"
+                          placeholder="Referencia (ej: Juan 3:16)"
+                        />
+                        <input
+                          type="text"
+                          value={block.quoteUrl || ''}
+                          onChange={(e) => updateBlock(block.id, { quoteUrl: e.target.value })}
+                          className="bg-transparent text-xs text-blue-600 border-b border-black/10 focus:outline-none focus:border-blue-600"
+                          placeholder="URL del versículo..."
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                            <button
-                              onClick={() =>
-                                updateBlockStyle(block.id, { italic: !block.style?.italic })
-                              }
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.italic ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                              title="Cursiva"
-                            >
-                              <Italic size={13} />
-                            </button>
+                  {/* Image Block */}
+                  {block.type === 'image' && (
+                    <div className="flex flex-col items-center space-y-2">
+                      {block.imageUrl ? (
+                        <div className="relative w-full max-w-lg h-64 md:h-80 rounded-2xl overflow-hidden shadow-md">
+                          <img src={block.imageUrl} alt={block.imageAlt || 'Imagen'} className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-full h-40 bg-gray-200 rounded-2xl flex items-center justify-center text-gray-500 text-xs uppercase">
+                          Imagen sin URL
+                        </div>
+                      )}
+                      <div className="w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                        <input
+                          type="text"
+                          value={block.imageUrl || ''}
+                          onChange={(e) => updateBlock(block.id, { imageUrl: e.target.value })}
+                          className="bg-white border border-black/10 rounded-lg p-2 text-xs focus:outline-none focus:border-black"
+                          placeholder="URL de la imagen..."
+                        />
+                        <input
+                          type="text"
+                          value={block.imageAlt || ''}
+                          onChange={(e) => updateBlock(block.id, { imageAlt: e.target.value })}
+                          className="bg-white border border-black/10 rounded-lg p-2 text-xs focus:outline-none focus:border-black"
+                          placeholder="Pie de foto..."
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                            <button
-                              onClick={() =>
-                                updateBlockStyle(block.id, { underline: !block.style?.underline })
-                              }
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.underline ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                              title="Subrayado"
-                            >
-                              <Underline size={13} />
-                            </button>
+                  {/* List Block */}
+                  {block.type === 'list' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 mb-1">
+                        <span>Lista:</span>
+                        <button
+                          onClick={() => updateBlock(block.id, { listType: 'bullet' })}
+                          className={`px-2 py-0.5 rounded ${block.listType === 'bullet' ? 'bg-black text-white' : 'bg-gray-200'}`}
+                        >
+                          Viñetas
+                        </button>
+                        <button
+                          onClick={() => updateBlock(block.id, { listType: 'number' })}
+                          className={`px-2 py-0.5 rounded ${block.listType === 'number' ? 'bg-black text-white' : 'bg-gray-200'}`}
+                        >
+                          Numerada
+                        </button>
+                      </div>
 
+                      <div className="space-y-1 ml-4">
+                        {(block.items || []).map((item, itemIdx) => (
+                          <div key={itemIdx} className="flex items-center gap-2">
+                            <span className="text-xs font-bold">{block.listType === 'number' ? `${itemIdx + 1}.` : '•'}</span>
+                            <input
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const newItems = [...(block.items || [])];
+                                newItems[itemIdx] = e.target.value;
+                                updateBlock(block.id, { items: newItems });
+                              }}
+                              className="flex-1 bg-transparent border-b border-black/10 text-sm focus:outline-none focus:border-black"
+                            />
                             <button
-                              onClick={() =>
-                                updateBlockStyle(block.id, { highlight: !block.style?.highlight })
-                              }
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.highlight ? 'text-yellow-400 font-bold' : 'text-gray-400'
-                              }`}
-                              title="Resaltado Amarillo"
+                              onClick={() => {
+                                const newItems = (block.items || []).filter((_, i) => i !== itemIdx);
+                                updateBlock(block.id, { items: newItems });
+                              }}
+                              className="text-red-500 hover:text-red-700 p-1"
                             >
-                              <Highlighter size={13} />
-                            </button>
-
-                            <span className="w-px h-3 bg-white/10 mx-0.5" />
-
-                            <button
-                              onClick={() => updateBlockStyle(block.id, { textAlign: 'left' })}
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.textAlign === 'left' ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                            >
-                              <AlignLeft size={13} />
-                            </button>
-                            <button
-                              onClick={() => updateBlockStyle(block.id, { textAlign: 'center' })}
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.textAlign === 'center' ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                            >
-                              <AlignCenter size={13} />
-                            </button>
-                            <button
-                              onClick={() => updateBlockStyle(block.id, { textAlign: 'right' })}
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.textAlign === 'right' ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                            >
-                              <AlignRight size={13} />
-                            </button>
-                            <button
-                              onClick={() => updateBlockStyle(block.id, { textAlign: 'justify' })}
-                              className={`p-1 rounded hover:bg-white/10 ${
-                                block.style?.textAlign === 'justify' ? 'text-[#22c55e]' : 'text-gray-400'
-                              }`}
-                            >
-                              <AlignJustify size={13} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
-                        )}
-
-                        {/* Move Up/Down Controls */}
+                        ))}
                         <button
-                          onClick={() => moveBlock(index, 'up')}
-                          disabled={index === 0}
-                          className="p-1 text-gray-400 hover:text-white disabled:opacity-30"
-                          title="Mover arriba"
+                          onClick={() => updateBlock(block.id, { items: [...(block.items || []), 'Nuevo punto'] })}
+                          className="text-xs text-blue-600 font-bold hover:underline mt-1 flex items-center gap-1"
                         >
-                          <ChevronUp size={16} />
-                        </button>
-                        <button
-                          onClick={() => moveBlock(index, 'down')}
-                          disabled={index === currentTopic.blocks.length - 1}
-                          className="p-1 text-gray-400 hover:text-white disabled:opacity-30"
-                          title="Mover abajo"
-                        >
-                          <ChevronDown size={16} />
-                        </button>
-                        <button
-                          onClick={() => removeBlock(block.id)}
-                          className="p-1 text-red-400 hover:text-red-300 ml-1"
-                          title="Eliminar bloque"
-                        >
-                          <Trash2 size={16} />
+                          <Plus size={12} /> Agregar elemento
                         </button>
                       </div>
                     </div>
-
-                    {/* Block Fields */}
-                    {block.type === 'heading' && (
-                      <div>
-                        <input
-                          type="text"
-                          value={block.text || ''}
-                          onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                          className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#22c55e] font-bold"
-                          placeholder="Texto del encabezado..."
-                        />
-                      </div>
-                    )}
-
-                    {block.type === 'paragraph' && (
-                      <div>
-                        <textarea
-                          rows={4}
-                          value={block.text || ''}
-                          onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                          className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-[#22c55e]"
-                          placeholder="Texto del párrafo..."
-                        />
-                      </div>
-                    )}
-
-                    {block.type === 'quote' && (
-                      <div className="space-y-2">
-                        <div>
-                          <label className="block text-[10px] text-gray-400 uppercase">
-                            Texto de la Cita / Versículo
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={block.quoteText || ''}
-                            onChange={(e) => updateBlock(block.id, { quoteText: e.target.value })}
-                            className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-[#22c55e]"
-                            placeholder="“Porque de tal manera amó Dios al mundo...”"
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] text-gray-400 uppercase">
-                              Referencia (Pasaje)
-                            </label>
-                            <input
-                              type="text"
-                              value={block.quoteReference || ''}
-                              onChange={(e) => updateBlock(block.id, { quoteReference: e.target.value })}
-                              className="w-full bg-black/60 border border-white/10 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                              placeholder="Juan 3:16 (Reina-Valera 1960)"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-gray-400 uppercase">
-                              Enlace del Versículo (BibleGateway, etc)
-                            </label>
-                            <input
-                              type="text"
-                              value={block.quoteUrl || ''}
-                              onChange={(e) => updateBlock(block.id, { quoteUrl: e.target.value })}
-                              className="w-full bg-black/60 border border-white/10 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                              placeholder="https://..."
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {block.type === 'image' && (
-                      <div className="space-y-2">
-                        <div>
-                          <label className="block text-[10px] text-gray-400 uppercase">
-                            URL de la Imagen
-                          </label>
-                          <input
-                            type="text"
-                            value={block.imageUrl || ''}
-                            onChange={(e) => updateBlock(block.id, { imageUrl: e.target.value })}
-                            className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                            placeholder="https://images.unsplash.com/..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-gray-400 uppercase">
-                            Descripción / Pie de foto
-                          </label>
-                          <input
-                            type="text"
-                            value={block.imageAlt || ''}
-                            onChange={(e) => updateBlock(block.id, { imageAlt: e.target.value })}
-                            className="w-full bg-black/60 border border-white/10 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                            placeholder="Descripción opcional"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {block.type === 'list' && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 mb-1">
-                          <label className="text-[10px] text-gray-400 uppercase">Tipo de Lista:</label>
-                          <button
-                            onClick={() => updateBlock(block.id, { listType: 'bullet' })}
-                            className={`px-2 py-0.5 rounded text-xs ${
-                              block.listType === 'bullet'
-                                ? 'bg-[#22c55e] text-black font-bold'
-                                : 'bg-white/5 text-gray-400'
-                            }`}
-                          >
-                            Viñetas (•)
-                          </button>
-                          <button
-                            onClick={() => updateBlock(block.id, { listType: 'number' })}
-                            className={`px-2 py-0.5 rounded text-xs ${
-                              block.listType === 'number'
-                                ? 'bg-[#22c55e] text-black font-bold'
-                                : 'bg-white/5 text-gray-400'
-                            }`}
-                          >
-                            Numerada (1, 2, 3)
-                          </button>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          {(block.items || []).map((item, itemIdx) => (
-                            <div key={itemIdx} className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">{itemIdx + 1}.</span>
-                              <input
-                                type="text"
-                                value={item}
-                                onChange={(e) => {
-                                  const newItems = [...(block.items || [])];
-                                  newItems[itemIdx] = e.target.value;
-                                  updateBlock(block.id, { items: newItems });
-                                }}
-                                className="flex-1 bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                              />
-                              <button
-                                onClick={() => {
-                                  const newItems = (block.items || []).filter((_, i) => i !== itemIdx);
-                                  updateBlock(block.id, { items: newItems });
-                                }}
-                                className="p-1 text-red-400 hover:text-red-300"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => {
-                              updateBlock(block.id, {
-                                items: [...(block.items || []), 'Nuevo elemento'],
-                              });
-                            }}
-                            className="flex items-center gap-1 text-xs text-[#22c55e] hover:underline mt-1 font-medium"
-                          >
-                            <Plus size={12} />
-                            <span>Agregar elemento a la lista</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {block.type === 'link' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-gray-400 uppercase">
-                            Texto del Enlace
-                          </label>
-                          <input
-                            type="text"
-                            value={block.linkText || ''}
-                            onChange={(e) => updateBlock(block.id, { linkText: e.target.value })}
-                            className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                            placeholder="Ej: Ver Estudio Bíblico"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-gray-400 uppercase">
-                            URL / Enlace
-                          </label>
-                          <input
-                            type="text"
-                            value={block.linkUrl || ''}
-                            onChange={(e) => updateBlock(block.id, { linkUrl: e.target.value })}
-                            className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#22c55e]"
-                            placeholder="https://..."
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
 
-        {/* Right Column: Live Word-like Preview Pane */}
-        {(activeTab === 'preview' || activeTab === 'split') && (
-          <div
-            className={`${
-              activeTab === 'split' ? 'md:col-span-6' : 'md:col-span-12'
-            } p-4 md:p-6 bg-[#000000] overflow-y-auto flex flex-col`}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs uppercase font-mono tracking-widest text-[#22c55e] font-bold flex items-center gap-1.5">
-                <Eye size={14} /> Vista Previa en Tiempo Real
-              </span>
-              <span className="text-[10px] text-gray-500">
-                Plantilla idéntica a la vista del usuario
-              </span>
-            </div>
-
-            <CourseTopicPreview
-              title={currentTopic.title}
-              subtitle={currentTopic.subtitle}
-              blocks={currentTopic.blocks}
-              currentSlug={course.slug}
-            />
+          <div className="mt-12 pt-6 border-t border-black/10 flex justify-center">
+            <button
+              onClick={() => addBlock('paragraph')}
+              className="flex items-center gap-2 px-6 py-2.5 bg-black text-white rounded-full text-xs font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md"
+            >
+              <Plus size={14} />
+              <span>Añadir Párrafo al Documento</span>
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
