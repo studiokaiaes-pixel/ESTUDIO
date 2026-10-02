@@ -18,6 +18,7 @@
     "cobe": "^2.0.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.553.0",
+    "mammoth": "^1.13.0",
     "motion": "^12.23.24",
     "next": "^15.4.9",
     "postcss": "^8.5.6",

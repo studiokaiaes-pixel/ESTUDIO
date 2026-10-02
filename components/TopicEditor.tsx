@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Course, Topic, ContentBlock } from '@/lib/coursesStore';
+import { parseWordDocument } from '@/lib/wordParser';
 import {
   ArrowLeft,
   Plus,
@@ -20,12 +21,11 @@ import {
   Quote,
   Image as ImageIcon,
   List,
-  ListOrdered,
-  Link as LinkIcon,
-  Eye,
   Save,
   Type,
-  Maximize2,
+  FileUp,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { ProgressiveBlur } from '@/components/ui/progressive-blur';
 
@@ -44,6 +44,8 @@ export function TopicEditor({
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(
     currentTopic.blocks[0]?.id || null
   );
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeBlock = currentTopic.blocks.find((b) => b.id === selectedBlockId);
 
@@ -53,6 +55,30 @@ export function TopicEditor({
 
   const handleSubtitleChange = (val: string) => {
     setCurrentTopic((prev) => ({ ...prev, subtitle: val }));
+  };
+
+  const handleWordFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsImporting(true);
+      const buffer = await file.arrayBuffer();
+      const importedBlocks = await parseWordDocument(buffer);
+
+      if (importedBlocks.length > 0) {
+        setCurrentTopic((prev) => ({
+          ...prev,
+          blocks: [...prev.blocks, ...importedBlocks],
+        }));
+        setSelectedBlockId(importedBlocks[0].id);
+      }
+    } catch (err) {
+      alert('Error al leer el archivo Word. Por favor asegúrate de seleccionar un archivo .docx válido.');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const addBlock = (type: ContentBlock['type']) => {
@@ -133,6 +159,15 @@ export function TopicEditor({
 
   return (
     <div className="flex flex-col h-screen bg-[#111111] text-white font-sans overflow-hidden">
+      {/* Hidden File Input for Word .docx Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleWordFileUpload}
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+      />
+
       {/* Word-like Top Navigation Header */}
       <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0 flex-wrap gap-2">
         <div className="flex items-center gap-3">
@@ -145,7 +180,7 @@ export function TopicEditor({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] bg-[#22c55e]/20 text-[#22c55e] font-mono px-2 py-0.5 rounded font-bold uppercase">
-                Documento Word Editor
+                Editor estilo Word
               </span>
               <span className="text-xs text-gray-400">Curso: {course.title}</span>
             </div>
@@ -153,13 +188,30 @@ export function TopicEditor({
           </div>
         </div>
 
-        <button
-          onClick={() => onSaveTopic(currentTopic)}
-          className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-[#22c55e]/20"
-        >
-          <Save size={16} />
-          <span>Guardar Documento</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Import Word Document Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all shadow-md disabled:opacity-50"
+            title="Sube un archivo .docx de Microsoft Word y copia su formato automáticamente"
+          >
+            {isImporting ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <FileUp size={16} />
+            )}
+            <span>{isImporting ? 'Importando Word...' : 'Importar Word (.docx)'}</span>
+          </button>
+
+          <button
+            onClick={() => onSaveTopic(currentTopic)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-black font-bold text-sm rounded-xl transition-all shadow-lg shadow-[#22c55e]/20"
+          >
+            <Save size={16} />
+            <span>Guardar Documento</span>
+          </button>
+        </div>
       </div>
 
       {/* Word Toolbar Ribbon */}
