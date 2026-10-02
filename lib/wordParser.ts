@@ -26,11 +26,11 @@ export async function parseWordDocument(arrayBuffer: ArrayBuffer): Promise<Conte
 
       const blockId = `word-b-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`;
 
-      // Check inline styling formatting
+      // Check inline formatting details from Word
       const isBold = el.querySelector('strong, b') !== null || el.tagName === 'B' || el.tagName === 'STRONG';
       const isItalic = el.querySelector('em, i') !== null || el.tagName === 'I' || el.tagName === 'EM';
       const isUnderline = el.querySelector('u') !== null || el.tagName === 'U';
-      const isHighlight = el.querySelector('mark') !== null || el.style.backgroundColor !== '';
+      const isHighlight = el.querySelector('mark') !== null || el.innerHTML.includes('background-color') || el.style.backgroundColor !== '';
 
       if (tagName.startsWith('h')) {
         blocks.push({
@@ -48,24 +48,34 @@ export async function parseWordDocument(arrayBuffer: ArrayBuffer): Promise<Conte
           id: blockId,
           type: 'quote',
           quoteText: `“${text}”`,
-          quoteReference: 'Cita importada de Word',
+          quoteReference: 'Cita de Word',
         });
       } else if (tagName === 'ul' || tagName === 'ol') {
-        const items = Array.from(el.querySelectorAll('li')).map((li) => li.textContent?.trim() || '');
-        blocks.push({
-          id: blockId,
-          type: 'list',
-          listType: tagName === 'ol' ? 'number' : 'bullet',
-          items,
-        });
+        const items = Array.from(el.querySelectorAll('li')).map((li) => li.textContent?.trim() || '').filter(Boolean);
+        if (items.length > 0) {
+          blocks.push({
+            id: blockId,
+            type: 'list',
+            listType: tagName === 'ol' ? 'number' : 'bullet',
+            items,
+          });
+        }
       } else if (tagName === 'p') {
-        // Check if paragraph contains quote marks
-        if (text.startsWith('“') || text.startsWith('"') || text.startsWith('«')) {
+        // Handle images inside paragraphs
+        const img = el.querySelector('img');
+        if (img) {
+          blocks.push({
+            id: blockId,
+            type: 'image',
+            imageUrl: img.src,
+            imageAlt: img.alt || 'Imagen de Word',
+          });
+        } else if (text.startsWith('“') || text.startsWith('"') || text.startsWith('«')) {
           blocks.push({
             id: blockId,
             type: 'quote',
             quoteText: text,
-            quoteReference: 'Versículo / Cita',
+            quoteReference: 'Cita / Versículo',
           });
         } else {
           blocks.push({
